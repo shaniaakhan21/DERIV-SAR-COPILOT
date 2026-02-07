@@ -6,6 +6,159 @@ An intelligent financial crime detection system that uses behavioral anomaly det
 
 ---
 
+## Live Demo
+
+| Service  | URL |
+|----------|-----|
+| **Frontend** | https://sar-ai-copilot.netlify.app/ |
+| **Backend API** | https://deriv-sar-copilot.onrender.com |
+
+### Test CSV
+
+Download the sample transaction dataset to try the system:
+
+**[Download demo.csv from Google Drive](https://drive.google.com/file/d/1G_1SNE7gPpW5nJUrqeJfqW0fi26wh0H3/view?usp=sharing)**
+
+### How to test
+
+1. Open the [live frontend](https://sar-ai-copilot.netlify.app/)
+2. Upload the demo CSV file
+3. Browse flagged cases on the dashboard
+4. Click into any case to view the full investigation pack
+5. Click **Generate SAR Draft** to produce an AI-written narrative
+
+---
+
+## API Reference (Postman)
+
+Base URL: `https://deriv-sar-copilot.onrender.com`
+
+### Health Check
+
+```
+GET /health
+```
+
+Response: `{ "ok": true }`
+
+### Upload Transactions (CSV)
+
+```
+POST /triage/upload
+Content-Type: multipart/form-data
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `file` | file | CSV file with transaction data |
+
+**Postman setup:** Body > form-data > key = `file` (type: File) > select your CSV.
+
+Response:
+```json
+{
+  "batchId": "batch_abc123...",
+  "rows": 500,
+  "cases": 42,
+  "topK": 42,
+  "stats": {
+    "avgEventsPerCase": 12,
+    "largestClusterInTopK": 47,
+    "largestClusterOverall": 47,
+    "highRiskCount": 5
+  },
+  "unsupervised_summary": { ... }
+}
+```
+
+> Save the `batchId` from the response — you need it for all subsequent requests.
+
+### List Cases
+
+```
+GET /cases?batchId={batchId}
+```
+
+| Param | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `batchId` | Yes | — | From upload response |
+| `k` | No | 50 | Max cases to return (max 200) |
+| `minScore` | No | 0 | Minimum risk score filter (0-100) |
+| `sortBy` | No | `score` | `score` or `priority` |
+
+### Get Case Detail
+
+```
+GET /cases/{caseId}?batchId={batchId}
+```
+
+| Param | Required | Description |
+|-------|----------|-------------|
+| `batchId` | Yes | From upload response |
+| `explain` | No | Set to `true` for plain-language explanations |
+
+Returns the full investigation pack: risk score, reasons, typology tags, timeline, link evidence, score breakdown, and behavioral anomaly data.
+
+### Submit Feedback (TP/FP)
+
+```
+POST /cases/{caseId}/feedback
+Content-Type: application/json
+```
+
+Body:
+```json
+{
+  "batchId": "batch_abc123...",
+  "label": "TP"
+}
+```
+
+`label` must be `"TP"` (true positive) or `"FP"` (false positive). Feedback updates Bayesian weights for future scoring.
+
+### Generate SAR Report
+
+```
+POST /sar/generate
+Content-Type: application/json
+```
+
+Body:
+```json
+{
+  "batchId": "batch_abc123...",
+  "caseId": "case_cluster_user_ring_002"
+}
+```
+
+Returns an AI-generated SAR draft with narrative, summary, key metrics, network info, and investigator next steps.
+
+### Get Metrics
+
+```
+GET /metrics?batchId={batchId}
+```
+
+Returns alert reduction stats, typology distribution, feedback precision, intervention metrics, and unsupervised discovery data.
+
+### Get Unsupervised Discovery
+
+```
+GET /unsupervised/{batchId}
+```
+
+Returns DBSCAN clustering results — discovered typology patterns, rare clusters, and noise count.
+
+### Delete Batch
+
+```
+DELETE /batches/{batchId}
+```
+
+Removes a batch from memory.
+
+---
+
 ## 📚 Quick Links
 
 ### Getting Started
