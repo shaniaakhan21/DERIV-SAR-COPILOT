@@ -35,7 +35,7 @@ export default function UnsupervisedDiscovery({ batchId }) {
       return;
     }
 
-    const BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+    const BASE = import.meta.env.VITE_API_BASE_URL || "https://deriv-sar-copilot.onrender.com/";
     fetch(`${BASE}/unsupervised/${batchId}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch unsupervised discovery data");
