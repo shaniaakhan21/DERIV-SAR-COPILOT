@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_BASE_URL || "https://deriv-sar-copilot.onrender.com/";
+const BASE = import.meta.env.VITE_API_BASE_URL || "https://deriv-sar-copilot.onrender.com";
 
 export async function uploadFile(file) {
   const fd = new FormData();

@@ -25,11 +25,10 @@ export default function Metrics({ batchId }) {
 
   useEffect(() => {
     if (!batchId) {
-      setLoading(false);
       return;
     }
 
-    const BASE = import.meta.env.VITE_API_BASE_URL || "https://deriv-sar-copilot.onrender.com/";
+    const BASE = import.meta.env.VITE_API_BASE_URL || "https://deriv-sar-copilot.onrender.com";
     fetch(`${BASE}/metrics?batchId=${batchId}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch metrics");
@@ -38,9 +37,12 @@ export default function Metrics({ batchId }) {
       .then((data) => {
         setMetrics(data);
         setError(null);
+        setLoading(false);
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
   }, [batchId]);
 
   if (!batchId) {
