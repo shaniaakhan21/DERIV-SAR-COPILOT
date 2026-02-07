@@ -1,0 +1,27 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "generate-demo": "node scripts/generate_enhanced_demo.js",
+    "test-unsupervised": "node scripts/test_unsupervised.js",
+    "test-temporal": "node scripts/test_temporal.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "csv-parse": "^6.1.0",
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "multer": "^2.0.2",
+    "openai": "^6.18.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}

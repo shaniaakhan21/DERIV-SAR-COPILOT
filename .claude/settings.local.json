@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx vite build)",
+      "Bash(node:*)",
+      "Bash(timeout:*)",
+      "Bash(curl:*)",
+      "Bash(ping:*)",
+      "Bash(taskkill:*)",
+      "Bash(del \"c:\\\\Users\\\\Shaniya Khan\\\\Clients\\\\deriv-sar-copilot\\\\frontend\\\\src\\\\App.css\")",
+      "Bash(cmd /c del \"c:\\\\Users\\\\Shaniya Khan\\\\Clients\\\\deriv-sar-copilot\\\\frontend\\\\src\\\\App.css\")",
+      "Bash(npm ls:*)",
+      "Bash(cd:*)",
+      "Bash(dir:*)",
+      "Bash(del \"c:\\\\Users\\\\Shaniya Khan\\\\Clients\\\\deriv-sar-copilot\\\\backend\\\\test_gemini.js\")"
+    ]
+  }
+}
