@@ -41,7 +41,7 @@ This system addresses the core problems in financial crime detection:
 
 ### Prerequisites
 - Node.js 18+ and npm
-- OpenRouter API key (FREE - for SAR generation)
+- OpenAI API key (for SAR generation)
 
 ### Setup
 
@@ -53,9 +53,8 @@ npm install
 # 2. Configure environment
 cd src
 cp .env.example .env
-# Edit .env and add your OPENROUTER_API_KEY
-# Get FREE key from: https://openrouter.ai/keys
-# See OPENROUTER_SETUP.md for detailed instructions
+# Edit .env and add your OPENAI_API_KEY
+# Get key from: https://platform.openai.com/api-keys
 
 # 3. Start backend
 cd ..

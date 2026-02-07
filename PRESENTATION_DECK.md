@@ -74,7 +74,7 @@
 - Backend: Node.js + Express
 - Frontend: React + Material-UI
 - ML: Custom algorithms (DBSCAN, DSU, Welford)
-- LLM: OpenRouter (100+ models)
+- LLM: OpenAI GPT-4
 
 ---
 

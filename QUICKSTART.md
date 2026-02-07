@@ -5,7 +5,7 @@ Get up and running in 5 minutes.
 ## Prerequisites
 
 - **Node.js 18+** and npm
-- **OpenRouter API key** (FREE - for SAR generation)
+- **OpenAI API key** (for SAR generation)
 
 ## Installation
 
@@ -26,18 +26,18 @@ npm install
 # Copy the example environment file
 cp src/.env.example src/.env
 
-# Edit src/.env and add your OpenRouter API key
+# Edit src/.env and add your OpenAI API key
 # Windows: notepad src/.env
 # Mac/Linux: nano src/.env
 ```
 
 **Required in `.env`:**
 ```bash
-OPENROUTER_API_KEY=sk-or-v1-your-actual-api-key-here
-OPENROUTER_MODEL=meta-llama/llama-3.1-8b-instruct:free
+OPENAI_API_KEY=sk-your-actual-api-key-here
+OPENAI_MODEL=gpt-4o-mini
 ```
 
-**Get FREE API key:** https://openrouter.ai/keys (no credit card required!)
+**Get API key:** https://platform.openai.com/api-keys
 
 ### 4. Install Frontend Dependencies
 ```bash
