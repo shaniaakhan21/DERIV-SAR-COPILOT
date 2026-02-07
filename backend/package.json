@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
+    "build": "echo 'No build step needed for this backend'",
     "generate-demo": "node scripts/generate_enhanced_demo.js",
     "test-unsupervised": "node scripts/test_unsupervised.js",
     "test-temporal": "node scripts/test_temporal.js"
