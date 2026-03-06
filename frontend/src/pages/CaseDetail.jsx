@@ -1,1407 +1,488 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Chip,
-  Stack,
-  Button,
-  Divider,
-  Alert,
-  CircularProgress,
-  Paper,
-  Grid,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  TableContainer,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  ButtonGroup,
-  LinearProgress,
-  Tooltip,
+  Box, Typography, Chip, Stack, Button, Divider, Alert,
+  CircularProgress, Grid, Table, TableBody, TableCell,
+  TableHead, TableRow, TableContainer, Paper, Accordion, AccordionSummary,
+  AccordionDetails, ButtonGroup, LinearProgress, Tooltip,
 } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
 
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import ThumbUpIcon from "@mui/icons-material/ThumbUp";
-import ThumbDownIcon from "@mui/icons-material/ThumbDown";
+import ArrowBackIcon    from "@mui/icons-material/ArrowBack";
+import ExpandMoreIcon   from "@mui/icons-material/ExpandMore";
+import CheckCircleIcon  from "@mui/icons-material/CheckCircle";
+import ThumbUpIcon      from "@mui/icons-material/ThumbUp";
+import ThumbDownIcon    from "@mui/icons-material/ThumbDown";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
-import BoltIcon from "@mui/icons-material/Bolt";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import HubIcon from "@mui/icons-material/Hub";
-import BlockIcon from "@mui/icons-material/Block";
-import SecurityIcon from "@mui/icons-material/Security";
-import InsightsIcon from "@mui/icons-material/Insights";
-import LinkIcon from "@mui/icons-material/Link";
+import BoltIcon         from "@mui/icons-material/Bolt";
+import TrendingUpIcon   from "@mui/icons-material/TrendingUp";
+import HubIcon          from "@mui/icons-material/Hub";
+import BlockIcon        from "@mui/icons-material/Block";
+import SecurityIcon     from "@mui/icons-material/Security";
+import InsightsIcon     from "@mui/icons-material/Insights";
+import LinkIcon         from "@mui/icons-material/Link";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import AccessTimeIcon   from "@mui/icons-material/AccessTime";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
-import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import ContentCopyIcon  from "@mui/icons-material/ContentCopy";
 
 import { getCaseDetail, generateSar, submitFeedback } from "../api";
 import ClusterGraph from "../components/ClusterGraph";
+import { ScoreBadge, SectionLabel, RiskSignalRow, TimelineEvent, TypologyTag } from "../components/ui";
 
-function ScoreGauge({ score }) {
-  const theme = useTheme();
-  const color =
-    score >= 70
-      ? theme.palette.error.main
-      : score >= 40
-        ? theme.palette.warning.main
-        : theme.palette.success.main;
+/* ── Score ring (SVG, animated) ── */
+function ScoreRing({ score }) {
+  const s      = Math.max(0, Math.min(100, Number(score) || 0));
+  const r      = 52;
+  const circ   = 2 * Math.PI * r;
+  const offset = circ - (s / 100) * circ;
+  const color  = s >= 60 ? "#E53935" : s >= 40 ? "#FFB300" : "#00C853";
+  const glow   = s >= 60 ? "score-glow-red" : s >= 40 ? "score-glow-amber" : "score-glow-green";
 
   return (
-    <Box sx={{ position: "relative", display: "inline-flex" }}>
-      <CircularProgress
-        variant="determinate"
-        value={Math.max(0, Math.min(100, Number(score) || 0))}
-        size={120}
-        thickness={8}
-        sx={{ 
-          color, 
-          "& .MuiCircularProgress-circle": { 
-            strokeLinecap: "round",
-            filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.15))"
-          } 
-        }}
-      />
-      <Box
-        sx={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "column",
-        }}
-      >
-        <Typography variant="h3" sx={{ color: "text.primary", lineHeight: 1, fontWeight: 700 }}>
-          {Number(score) || 0}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-          /100
-        </Typography>
+    <Box sx={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+      <svg width="128" height="128" className={glow}>
+        <circle cx="64" cy="64" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
+        <circle cx="64" cy="64" r={r} fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+          strokeDasharray={circ} strokeDashoffset={offset} transform="rotate(-90 64 64)"
+          style={{ transition: "stroke-dashoffset 0.8s ease-out" }}
+        />
+      </svg>
+      <Box sx={{ position: "absolute", textAlign: "center" }}>
+        <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "1.7rem", fontWeight: 800, color, lineHeight: 1 }}>{s}</Typography>
+        <Typography sx={{ fontSize: "0.58rem", color: "#475569", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>/100</Typography>
       </Box>
     </Box>
   );
 }
 
-function fmt(n) {
-  return Number(n || 0).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function fmtTs(ts) {
-  if (!ts) return "—";
-  try {
-    return new Date(ts).toISOString().slice(0, 19).replace("T", " ");
-  } catch {
-    return "—";
-  }
-}
-
+/* ── Helpers ── */
+function fmt(n)   { return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtTs(ts){ if (!ts) return "—"; try { return new Date(ts).toISOString().slice(0,19).replace("T"," "); } catch { return "—"; } }
 function signalIcon(detail = "") {
   const d = detail.toLowerCase();
-  if (d.includes("withdrawal ratio")) return <TrendingUpIcon fontSize="small" />;
-  if (d.includes("rapid")) return <BoltIcon fontSize="small" />;
-  if (d.includes("linked") || d.includes("network")) return <HubIcon fontSize="small" />;
-  if (d.includes("ip") || d.includes("device") || d.includes("affiliate")) return <LinkIcon fontSize="small" />;
-  if (d.includes("behavior")) return <WarningAmberIcon fontSize="small" />;
+  if (d.includes("withdrawal ratio"))                                          return <TrendingUpIcon fontSize="small" />;
+  if (d.includes("rapid"))                                                     return <BoltIcon fontSize="small" />;
+  if (d.includes("linked") || d.includes("network"))                          return <HubIcon fontSize="small" />;
+  if (d.includes("ip") || d.includes("device") || d.includes("affiliate"))    return <LinkIcon fontSize="small" />;
   return <WarningAmberIcon fontSize="small" />;
 }
 
+/* ── Dark card wrapper ── */
+function DarkCard({ children, sx = {}, accentColor }) {
+  return (
+    <Box sx={{ bgcolor: "#111118", border: `1px solid ${accentColor ? accentColor + "30" : "rgba(255,255,255,0.06)"}`, borderRadius: "6px", overflow: "hidden", ...(accentColor && { borderLeft: `3px solid ${accentColor}` }), ...sx }}>
+      {children}
+    </Box>
+  );
+}
+
+function CardHeader({ icon, title, right }) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 2, py: 1.5, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+      {icon && <Box sx={{ color: "#475569", display: "flex" }}>{icon}</Box>}
+      <Typography sx={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", flex: 1 }}>{title}</Typography>
+      {right}
+    </Box>
+  );
+}
+
+function FinRow({ label, value, valueColor }) {
+  return (
+    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", py: "8px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+      <Typography sx={{ fontSize: "0.75rem", color: "#64748b" }}>{label}</Typography>
+      <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.88rem", fontWeight: 700, color: valueColor || "#F1F5F9" }}>{value}</Typography>
+    </Box>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════ */
 export default function CaseDetail({ batchId, cases, setCases }) {
-  const { caseId } = useParams();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const { caseId }       = useParams();
+  const navigate          = useNavigate();
+  const [searchParams]    = useSearchParams();
+  const effectiveBatchId  = batchId || searchParams.get("batchId") || localStorage.getItem("batchId");
 
-  const effectiveBatchId =
-    batchId || searchParams.get("batchId") || localStorage.getItem("batchId");
+  const [pack,          setPack]          = useState(null);
+  const [sar,           setSar]           = useState(null);
+  const [loading,       setLoading]       = useState(true);
+  const [sarLoading,    setSarLoading]    = useState(false);
+  const [error,         setError]         = useState(null);
+  const [feedback,      setFeedback]      = useState(null);
+  const [actionSuccess, setActionSuccess] = useState(null);
+  const [sarCopied,     setSarCopied]     = useState(false);
 
-  const [pack, setPack] = useState(null);
-  const [sar, setSar] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [sarLoading, setSarLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [feedback, setFeedback] = useState(null);
-  const [actionSuccess, setActionSuccess] = useState(null); // For action feedback
-
-  // Action handlers
   const handleAction = (actionName) => {
-    const confirmMessage = {
-      'block': 'Block this account and hold all funds? This action requires senior approval.',
-      'freeze': 'Freeze withdrawals for this account? User will be notified.',
-      'escalate': 'Escalate this case to senior analyst? They will be notified immediately.',
-      'kyc': 'Request enhanced KYC verification? User will receive verification request.',
-      'history': 'Request full transaction history? This may take a few minutes.',
-      'investigate': 'Investigate all linked accounts in this cluster?',
-      'file_sar': 'File SAR with regulator? This action cannot be undone.',
-      'export': 'Export investigation pack as PDF?',
-      'close': 'Close this case as resolved? This will archive the case.',
-      'mark_fp': 'Mark as false positive? This will help train the system.',
-      'assign': 'Assign this case to investigation queue?'
+    const msgs = {
+      block: "Block this account and hold all funds? Requires senior approval.",
+      freeze: "Freeze withdrawals for this account?",
+      escalate: "Escalate to senior analyst?",
+      kyc: "Request enhanced KYC verification?",
+      history: "Request full transaction history?",
+      investigate: "Investigate all linked accounts in this cluster?",
+      file_sar: "File SAR with regulator? Cannot be undone.",
+      export: "Export investigation pack as PDF?",
+      close: "Close this case as resolved?",
+      mark_fp: "Mark as false positive?",
+      assign: "Assign to investigation queue?",
     };
-
-    if (window.confirm(confirmMessage[actionName])) {
-      // Show success message
-      setActionSuccess(`Action "${actionName}" completed successfully!`);
+    if (window.confirm(msgs[actionName])) {
+      setActionSuccess(`Action "${actionName}" completed successfully.`);
       setTimeout(() => setActionSuccess(null), 3000);
     }
   };
 
-    // ✅ Single source of truth for “signals”: evidence_signals (already includes scoring + behavior)
   const topSignals = useMemo(() => {
-    const list = Array.isArray(pack?.evidence_signals) ? pack.evidence_signals : [];
+    const list    = Array.isArray(pack?.evidence_signals) ? pack.evidence_signals : [];
     const sevRank = { error: 3, warning: 2, info: 1 };
-    return list
-      .slice()
-      .sort((a, b) => {
-        const sa = sevRank[a?.severity || "info"] || 1;
-        const sb = sevRank[b?.severity || "info"] || 1;
-        const pa = typeof a?.points === "number" ? a.points : 0;
-        const pb = typeof b?.points === "number" ? b.points : 0;
-        return sb - sa || pb - pa;
-      })
-      .slice(0, 7);
+    return list.slice().sort((a, b) => {
+      const sa = sevRank[a?.severity || "info"] || 1;
+      const sb = sevRank[b?.severity || "info"] || 1;
+      const pa = typeof a?.points === "number" ? a.points : 0;
+      const pb = typeof b?.points === "number" ? b.points : 0;
+      return sb - sa || pb - pa;
+    }).slice(0, 7);
   }, [pack?.evidence_signals]);
 
   useEffect(() => {
-    if (!effectiveBatchId) {
-      navigate("/");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-
+    if (!effectiveBatchId) { navigate("/"); return; }
+    setLoading(true); setError(null);
     getCaseDetail(effectiveBatchId, caseId)
-      .then((data) => {
-        setPack(data);
-        setFeedback(data.feedback);
-      })
+      .then((data) => { setPack(data); setFeedback(data.feedback); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [effectiveBatchId, caseId, navigate]);
 
   const handleSar = async () => {
-    setSarLoading(true);
-    setError(null);
-    try {
-      const result = await generateSar(effectiveBatchId, caseId);
-      setSar(result);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setSarLoading(false);
-    }
+    setSarLoading(true); setError(null);
+    try { setSar(await generateSar(effectiveBatchId, caseId)); }
+    catch (e) { setError(e.message); }
+    finally { setSarLoading(false); }
   };
 
   const handleFeedback = async (label) => {
-    setError(null); // Clear any previous errors
+    setError(null);
     try {
       await submitFeedback(effectiveBatchId, caseId, label);
       setFeedback(label);
-      setError(null); // Clear errors on success
-      
-      // Update the cases array in App state so the label shows when navigating back
-      if (setCases && cases) {
-        setCases(cases.map(c => 
-          c.case_id === caseId ? { ...c, feedback: label } : c
-        ));
-      }
-    } catch (e) {
-      setError(e.message);
-    }
+      if (setCases && cases) setCases(cases.map((c) => c.case_id === caseId ? { ...c, feedback: label } : c));
+    } catch (e) { setError(e.message); }
   };
 
-  if (loading)
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-        <CircularProgress />
-      </Box>
-    );
+  const copySar = () => {
+    const text = sar?.narrative || sar?.report || JSON.stringify(sar, null, 2);
+    navigator.clipboard.writeText(text).then(() => { setSarCopied(true); setTimeout(() => setSarCopied(false), 2000); });
+  };
 
-  if (error) return <Alert severity="error">{error}</Alert>;
-  if (!pack) return <Alert severity="warning">Case not found</Alert>;
+  if (loading) return <Box sx={{ display: "flex", justifyContent: "center", py: 12 }}><CircularProgress size={32} sx={{ color: "#F97316" }} /></Box>;
+  if (error)   return <Alert severity="error">{error}</Alert>;
+  if (!pack)   return <Alert severity="warning">Case not found</Alert>;
 
-  const score = Number(pack?.score ?? 0);
-  const reasonsCount = (pack?.reasons || []).filter(Boolean).length;
-  const typologiesCount = (pack?.typologyTags || []).filter(Boolean).length;
-  const linkStrength = Number(pack?.linkStrength ?? 0);
+  const score          = Number(pack?.score ?? 0);
+  const reasonsCount   = (pack?.reasons || []).filter(Boolean).length;
+  const typologiesCount= (pack?.typologyTags || []).filter(Boolean).length;
+  const linkStrength   = Number(pack?.linkStrength ?? 0);
+  const isLowRisk      = score < 35 && reasonsCount === 0 && typologiesCount === 0 && linkStrength === 0;
+  const timeline       = pack.timeline || [];
+  const scoreColor     = score >= 60 ? "#E53935" : score >= 40 ? "#FFB300" : "#00C853";
 
-  const isLowRisk =
-    score < 35 && reasonsCount === 0 && typologiesCount === 0 && linkStrength === 0;
-
-  const timeline = pack.timeline || [];
-
-  const rawBehaviorAnom = Number(pack.behaviorAnom ?? 0);
-  const behaviorPct =
-    rawBehaviorAnom <= 1 ? Math.round(rawBehaviorAnom * 100) : Math.round(rawBehaviorAnom);
-
-  const scoreBorder =
-    score >= 70 ? "error.main" : score >= 40 ? "warning.main" : "success.main";
+  const actionGroups = [
+    { label: "Immediate Actions", color: "#E53935", actions: [{ key: "block", label: "Block Account" }, { key: "freeze", label: "Freeze Withdrawals" }, { key: "escalate", label: "Escalate" }] },
+    { label: "Investigation",     color: "#F97316", actions: [{ key: "history", label: "Full History" }, { key: "investigate", label: "Linked Accounts" }, { key: "kyc", label: "Enhanced KYC" }] },
+    { label: "Regulatory",        color: "#FFB300", actions: [{ key: "file_sar", label: "File SAR" }, { key: "export", label: "Export PDF" }] },
+    { label: "Case Management",   color: "#64748b", actions: [{ key: "close", label: "Close Case" }, { key: "assign", label: "Assign" }, { key: "mark_fp", label: "Mark FP" }] },
+  ];
 
   return (
-    <Box>
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={() => navigate(`/?batchId=${effectiveBatchId}`)}
-        sx={{ mb: 2 }}
-      >
-        Back to Dashboard
-      </Button>
+    <Box sx={{ animation: "fadeSlideUp 0.2s ease-out" }}>
 
-      {/* Action Success Alert */}
-      {actionSuccess && (
-        <Alert severity="success" icon={<CheckCircleIcon />} sx={{ mb: 2 }}>
-          {actionSuccess}
-        </Alert>
-      )}
-
-      {/* Withdrawal hold banner */}
-      {pack.would_block && (
-        <Alert severity="error" icon={<BlockIcon />} sx={{ mb: 2, fontWeight: 600 }}>
-          Withdrawal would be held for review — risk score {pack.score}/100 with pending
-          withdrawal detected.
-        </Alert>
-      )}
-
-      {/* Fraud Classification Banner */}
-      {pack.fraudClassification && (
-        <Alert
-          severity={
-            pack.fraudClassification.severity === "critical" ? "error" :
-            pack.fraudClassification.severity === "high" ? "warning" : "info"
-          }
-          icon={<PriorityHighIcon />}
-          sx={{ mb: 2 }}
-        >
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-            <Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                {pack.fraudClassification.description}
-              </Typography>
-              <Typography variant="caption">
-                Priority {pack.fraudClassification.priority} | SLA: {pack.fraudClassification.slaHours}h | 
-                Deadline: {new Date(pack.fraudClassification.deadline).toLocaleString()}
-              </Typography>
+      {/* ── Sticky top bar ── */}
+      <Box sx={{ position: "sticky", top: 52, zIndex: 100, bgcolor: "#0A0B0F", borderBottom: "1px solid rgba(255,255,255,0.06)", py: 1, mb: 2.5, mx: -3, px: 3 }}>
+        <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap" sx={{ gap: 1 }}>
+          <Button startIcon={<ArrowBackIcon sx={{ fontSize: 15 }} />} onClick={() => navigate(`/?batchId=${effectiveBatchId}`)} size="small" sx={{ color: "#64748b", fontSize: "0.78rem", "&:hover": { color: "#94A3B8" } }}>
+            Cases
+          </Button>
+          <Box sx={{ width: 1, height: 20, bgcolor: "rgba(255,255,255,0.06)" }} />
+          <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.82rem", fontWeight: 700, color: "#FB923C" }}>
+            {String(pack.case_id || "").replace("case_cluster_", "C-")}
+          </Typography>
+          <ScoreBadge score={score} />
+          {pack.fraudClassification?.severity && (
+            <Box sx={{ px: "8px", py: "2px", borderLeft: `3px solid ${scoreColor}`, bgcolor: `${scoreColor}15`, borderRadius: "0 4px 4px 0" }}>
+              <Typography sx={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: scoreColor }}>{pack.fraudClassification.severity}</Typography>
             </Box>
-          </Stack>
+          )}
+          <Box sx={{ flexGrow: 1 }} />
+          <ButtonGroup size="small">
+            <Button startIcon={<ThumbDownIcon sx={{ fontSize: 13 }} />} variant={feedback === "TP" ? "contained" : "outlined"} color="error"    onClick={() => handleFeedback("TP")} sx={{ fontSize: "0.72rem", fontWeight: 600 }}>True Positive</Button>
+            <Button startIcon={<ThumbUpIcon   sx={{ fontSize: 13 }} />} variant={feedback === "FP" ? "contained" : "outlined"} color="success"  onClick={() => handleFeedback("FP")} sx={{ fontSize: "0.72rem", fontWeight: 600 }}>False Positive</Button>
+          </ButtonGroup>
+          <Button variant="contained" size="small" onClick={handleSar} disabled={sarLoading}
+            startIcon={sarLoading ? <CircularProgress size={12} color="inherit" /> : <SecurityIcon sx={{ fontSize: 14 }} />}
+            sx={{ fontSize: "0.72rem", fontWeight: 600 }}
+          >
+            {sarLoading ? "Generating…" : "Generate SAR"}
+          </Button>
+        </Stack>
+      </Box>
+
+      {/* Alerts */}
+      {actionSuccess && <Alert severity="success" icon={<CheckCircleIcon />} sx={{ mb: 2 }}>{actionSuccess}</Alert>}
+      {error         && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {pack.would_block && <Alert severity="error" icon={<BlockIcon />} sx={{ mb: 2, fontWeight: 600 }}>Withdrawal would be held — risk score {pack.score}/100 with pending withdrawal detected.</Alert>}
+      {pack.fraudClassification && (
+        <Alert severity={pack.fraudClassification.severity === "critical" ? "error" : pack.fraudClassification.severity === "high" ? "warning" : "info"} icon={<PriorityHighIcon />} sx={{ mb: 2 }}>
+          <Typography sx={{ fontWeight: 600, fontSize: "0.82rem" }}>{pack.fraudClassification.description}</Typography>
+          <Typography sx={{ fontSize: "0.72rem", color: "#94A3B8", mt: 0.5 }}>Priority {pack.fraudClassification.priority} · SLA: {pack.fraudClassification.slaHours}h · Deadline: {new Date(pack.fraudClassification.deadline).toLocaleString()}</Typography>
         </Alert>
       )}
-
-      {/* Fraud Ring Detection Banner */}
       {(pack.link_evidence || []).length > 0 && pack.cluster_size > 1 && (
-        <Alert
-          severity="error"
-          icon={<HubIcon />}
-          sx={{ 
-            mb: 2,
-            bgcolor: "error.50",
-            border: "2px solid",
-            borderColor: "error.main"
-          }}
-        >
-          <Stack spacing={1}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              🚨 Fraud Ring Detected - {pack.cluster_size} Linked Accounts
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              Network Effect Analysis: {pack.linkStrength || 0} connection types identified
-            </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
-              {(() => {
-                const linkTypes = {};
-                (pack.link_evidence || []).forEach(ev => {
-                  linkTypes[ev.by] = (linkTypes[ev.by] || 0) + 1;
-                });
-                return Object.entries(linkTypes).map(([type, count]) => (
-                  <Chip
-                    key={type}
-                    label={`${count} shared ${type}${count > 1 ? 's' : ''}`}
-                    size="small"
-                    color="error"
-                    sx={{ fontWeight: 600 }}
-                  />
-                ));
-              })()}
-            </Stack>
-            <Typography variant="caption" sx={{ mt: 1, display: "block" }}>
-              ⚠️ Coordinated fraud ring: Multiple accounts sharing devices, IPs, or affiliates. 
-              This indicates organized fraud activity requiring immediate investigation.
-            </Typography>
+        <Alert severity="error" icon={<HubIcon />} sx={{ mb: 2.5 }}>
+          <Typography sx={{ fontWeight: 700, fontSize: "0.85rem" }}>Fraud Ring Detected — {pack.cluster_size} Linked Accounts</Typography>
+          <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1, gap: 0.5 }}>
+            {(() => { const types = {}; (pack.link_evidence||[]).forEach(ev => { types[ev.by] = (types[ev.by]||0)+1; }); return Object.entries(types).map(([type,count]) => <Chip key={type} label={`${count} shared ${type}${count>1?"s":""}`} size="small" color="error" sx={{ fontWeight:600, fontSize:"0.68rem" }} />); })()}
           </Stack>
         </Alert>
       )}
 
-      {/* Header row */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        {/* Score + meta */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card 
-            sx={{ 
-              height: "100%", 
-              borderLeft: 6, 
-              borderColor: scoreBorder,
-              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-              transition: "all 0.2s ease",
-              "&:hover": {
-                boxShadow: "0 8px 24px rgba(0,0,0,0.15)"
-              }
-            }}
-          >
-            <CardContent sx={{ textAlign: "center", py: 3 }}>
-              <ScoreGauge score={score} />
-              <Typography 
-                variant="h5" 
-                sx={{ 
-                  mt: 3, 
-                  mb: 1,
-                  fontFamily: "monospace",
-                  fontWeight: 700,
-                  color: "primary.main"
-                }}
-              >
-                {String(pack.case_id || "").replace("case_cluster_", "C-")}
-              </Typography>
+      {/* ── 3-column layout ── */}
+      <Grid container spacing={2} sx={{ alignItems: "flex-start" }}>
 
-              <Stack
-                direction="row"
-                spacing={1}
-                justifyContent="center"
-                sx={{ mt: 2, flexWrap: "wrap", gap: 1 }}
-              >
-                <Chip 
-                  label={`${pack.cluster_size || 1} accounts`} 
-                  size="small"
-                  sx={{ fontWeight: 600 }}
-                />
-                <Chip 
-                  label={`${pack.linkStrength || 0} link types`} 
-                  size="small" 
-                  color="primary"
-                  sx={{ fontWeight: 600 }}
-                />
-              </Stack>
+        {/* LEFT 30% */}
+        <Grid size={{ xs: 12, md: 4, lg: 3 }}>
+          <Stack spacing={2}>
 
-              {(pack.typologyTags || []).length > 0 && (
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  justifyContent="center"
-                  sx={{ mt: 2, flexWrap: "wrap", gap: 1 }}
-                >
-                  {(pack.typologyTags || []).slice(0, 4).map((t) => (
-                    <Chip
-                      key={t}
-                      label={t.replace(/_/g, " ")}
-                      size="small"
-                      variant="outlined"
-                      color="warning"
-                      sx={{ fontWeight: 600 }}
-                    />
-                  ))}
-                  {(pack.typologyTags || []).length > 4 && (
-                    <Chip 
-                      label={`+${pack.typologyTags.length - 4}`} 
-                      size="small" 
-                      variant="outlined"
-                      sx={{ fontWeight: 600 }}
-                    />
-                  )}
-                </Stack>
-              )}
-
-              {/* Feedback */}
-              <Box sx={{ mt: 3 }}>
-                <Typography 
-                  variant="body2" 
-                  color="text.secondary" 
-                  gutterBottom
-                  sx={{ fontWeight: 600, mb: 1.5 }}
-                >
-                  Analyst Feedback
+            {/* Score card */}
+            <DarkCard accentColor={scoreColor}>
+              <Box sx={{ p: 2.5, textAlign: "center" }}>
+                <ScoreRing score={score} />
+                <Typography sx={{ mt: 2, fontFamily: "'JetBrains Mono', monospace", fontSize: "0.78rem", fontWeight: 700, color: "#FB923C" }}>
+                  {String(pack.case_id || "").replace("case_cluster_", "C-")}
                 </Typography>
-                <ButtonGroup size="small" sx={{ boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
-                  <Button
-                    startIcon={<ThumbDownIcon />}
-                    variant={feedback === "TP" ? "contained" : "outlined"}
-                    color="error"
-                    onClick={() => handleFeedback("TP")}
-                    sx={{ fontWeight: 600, px: 2 }}
-                  >
-                    True Positive
-                  </Button>
-                  <Button
-                    startIcon={<ThumbUpIcon />}
-                    variant={feedback === "FP" ? "contained" : "outlined"}
-                    color="success"
-                    onClick={() => handleFeedback("FP")}
-                    sx={{ fontWeight: 600, px: 2 }}
-                  >
-                    False Positive
-                  </Button>
-                </ButtonGroup>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Risk Signals (compact, non-redundant) */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card 
-            sx={{ 
-              height: "100%",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.08)"
-            }}
-          >
-            <CardContent>
-              <Typography 
-                variant="h6" 
-                gutterBottom
-                sx={{ 
-                  fontWeight: 700,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  mb: 2
-                }}
-              >
-                <WarningAmberIcon color="warning" />
-                {isLowRisk ? "Risk Assessment" : "Risk Signals"}
-              </Typography>
-
-              {isLowRisk ? (
-                <>
-                  <Alert 
-                    severity="success" 
-                    icon={<CheckCircleIcon />} 
-                    sx={{ mb: 2, fontWeight: 600 }}
-                  >
-                    No risk signals detected for this case.
-                  </Alert>
-                  <Stack spacing={1}>
-                    {[
-                      "No rapid deposit–withdraw cycles",
-                      "No abnormal withdrawal ratio",
-                      "No shared device/IP/affiliate links",
-                      "Single-account activity only",
-                      "Velocity and volume within expected range",
-                    ].map((text, i) => (
-                      <Typography 
-                        key={i} 
-                        variant="body2" 
-                        color="text.secondary"
-                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
-                      >
-                        <CheckCircleIcon fontSize="small" color="success" /> {text}
-                      </Typography>
-                    ))}
-                  </Stack>
-                </>
-              ) : (
-                <>
-                  {topSignals.length === 0 ? (
-                    <Alert severity="info" icon={<InfoOutlinedIcon />}>
-                      No evidence signals available yet.
-                    </Alert>
-                  ) : (
-                    <Stack spacing={1.5}>
-                      {topSignals.map((sig, i) => (
-                        <Alert
-                          key={i}
-                          severity={sig.severity || "info"}
-                          icon={signalIcon(sig.detail)}
-                          variant="outlined"
-                          sx={{
-                            "& .MuiAlert-message": {
-                              width: "100%"
-                            }
-                          }}
-                          action={
-                            typeof sig.points === "number" ? (
-                              <Chip
-                                label={`+${sig.points}`}
-                                size="small"
-                                sx={{ 
-                                  fontFamily: "monospace", 
-                                  fontSize: "0.7rem",
-                                  fontWeight: 700
-                                }}
-                                color={
-                                  sig.severity === "error"
-                                    ? "error"
-                                    : sig.severity === "warning"
-                                      ? "warning"
-                                      : "default"
-                                }
-                              />
-                            ) : null
-                          }
-                        >
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {sig.detail}
-                          </Typography>
-                        </Alert>
-                      ))}
-                    </Stack>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Financials (compact, useful) */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card 
-            sx={{ 
-              height: "100%",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.08)"
-            }}
-          >
-            <CardContent>
-              <Typography 
-                variant="h6" 
-                gutterBottom
-                sx={{ 
-                  fontWeight: 700,
-                  mb: 3
-                }}
-              >
-                Financial Summary
-              </Typography>
-
-              <Stack spacing={2.5}>
-                <Box>
-                  <Typography 
-                    variant="body2" 
-                    color="text.secondary"
-                    sx={{ fontWeight: 600, mb: 0.5 }}
-                  >
-                    Total Deposits
-                  </Typography>
-                  <Typography 
-                    variant="h5" 
-                    sx={{ 
-                      color: "success.main",
-                      fontWeight: 700,
-                      fontFamily: "monospace"
-                    }}
-                  >
-                    ${fmt(pack.totals?.deposit)}
-                  </Typography>
-                </Box>
-
-                <Box>
-                  <Typography 
-                    variant="body2" 
-                    color="text.secondary"
-                    sx={{ fontWeight: 600, mb: 0.5 }}
-                  >
-                    Total Withdrawals
-                  </Typography>
-                  <Typography 
-                    variant="h5" 
-                    sx={{ 
-                      color: "error.main",
-                      fontWeight: 700,
-                      fontFamily: "monospace"
-                    }}
-                  >
-                    ${fmt(pack.totals?.withdraw)}
-                  </Typography>
-                </Box>
-
-                <Box>
-                  <Typography 
-                    variant="body2" 
-                    color="text.secondary"
-                    sx={{ fontWeight: 600, mb: 0.5 }}
-                  >
-                    Net Profit
-                  </Typography>
-                  <Typography 
-                    variant="h5"
-                    sx={{ 
-                      fontWeight: 700,
-                      fontFamily: "monospace"
-                    }}
-                  >
-                    ${fmt(pack.totals?.profit)}
-                  </Typography>
-                </Box>
-
-                <Divider />
-
-                <Box>
-                  <Typography 
-                    variant="body2" 
-                    color="text.secondary"
-                    sx={{ fontWeight: 600, mb: 1 }}
-                  >
-                    Cluster Members ({pack.member_count || 0})
-                  </Typography>
-                  <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ gap: 0.5 }}>
-                    {(pack.members || []).slice(0, 8).map((m) => (
-                      <Chip
-                        key={m}
-                        label={m}
-                        size="small"
-                        variant="outlined"
-                        sx={{ 
-                          fontFamily: "monospace", 
-                          fontSize: "0.7rem",
-                          fontWeight: 600
-                        }}
-                      />
-                    ))}
-                    {(pack.member_count || 0) > 8 && (
-                      <Chip 
-                        label={`+${pack.member_count - 8}`} 
-                        size="small"
-                        sx={{ fontWeight: 600 }}
-                      />
+                <Stack direction="row" spacing={1} justifyContent="center" sx={{ mt: 1.5, flexWrap: "wrap", gap: 0.75 }}>
+                  <Chip label={`${pack.cluster_size || 1} accounts`} size="small" sx={{ fontSize: "0.66rem", bgcolor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }} />
+                  <Chip label={`${pack.linkStrength || 0} link types`} size="small" sx={{ fontSize: "0.66rem", bgcolor: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.25)", color: "#FB923C" }} />
+                </Stack>
+                {(pack.typologyTags || []).length > 0 && (
+                  <Stack direction="row" spacing={0.5} justifyContent="center" sx={{ mt: 1.5, flexWrap: "wrap", gap: 0.5 }}>
+                    {(pack.typologyTags || []).slice(0, 4).map(t => <TypologyTag key={t} label={t} />)}
+                    {(pack.typologyTags || []).length > 4 && (
+                      <Box sx={{ display: "inline-flex", alignItems: "center", px: "6px", py: "2px", bgcolor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "4px", fontSize: "0.62rem", color: "#64748b" }}>+{pack.typologyTags.length - 4}</Box>
                     )}
                   </Stack>
+                )}
+              </Box>
+            </DarkCard>
+
+            {/* Financial summary */}
+            <DarkCard>
+              <CardHeader icon={<TrendingUpIcon fontSize="small" />} title="Financial Summary" />
+              <Box sx={{ px: 2, pb: 2 }}>
+                <FinRow label="Total Deposits"    value={`$${fmt(pack.totals?.deposit)}`}  valueColor="#69F0AE" />
+                <FinRow label="Total Withdrawals" value={`$${fmt(pack.totals?.withdraw)}`} valueColor="#EF5350" />
+                <FinRow label="Net Profit"        value={`$${fmt(pack.totals?.profit)}`} />
+                <Box sx={{ mt: 1.5 }}>
+                  <SectionLabel sx={{ mb: 1 }}>Members ({pack.member_count || 0})</SectionLabel>
+                  <Stack direction="row" flexWrap="wrap" sx={{ gap: 0.5 }}>
+                    {(pack.members || []).slice(0, 6).map(m => (
+                      <Box key={m} sx={{ px: "6px", py: "2px", bgcolor: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.2)", borderRadius: "4px", fontFamily: "'JetBrains Mono', monospace", fontSize: "0.6rem", color: "#FB923C" }}>{m}</Box>
+                    ))}
+                    {(pack.member_count || 0) > 6 && <Box sx={{ px: "6px", py: "2px", bgcolor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "4px", fontSize: "0.6rem", color: "#64748b" }}>+{pack.member_count - 6}</Box>}
+                  </Stack>
                 </Box>
-              </Stack>
-            </CardContent>
-          </Card>
+              </Box>
+            </DarkCard>
+
+          </Stack>
+        </Grid>
+
+        {/* CENTER 45% */}
+        <Grid size={{ xs: 12, md: 8, lg: 6 }}>
+          <Stack spacing={2}>
+
+            {/* Timeline */}
+            <DarkCard>
+              <CardHeader icon={<AccessTimeIcon fontSize="small" />} title={`Timeline — ${timeline.length} events`} />
+              <Box sx={{ maxHeight: 380, overflowY: "auto" }}>
+                {timeline.length === 0 ? (
+                  <Box sx={{ p: 3, textAlign: "center" }}><Typography sx={{ fontSize: "0.8rem", color: "#475569" }}>No timeline events</Typography></Box>
+                ) : (
+                  <>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, px: "14px", py: "6px", borderBottom: "1px solid rgba(255,255,255,0.04)", bgcolor: "#0D0E14" }}>
+                      {[["Type",36],["Timestamp",130],["User",100],["Amount",90],["Country",60],["Device",null],["IP",100]].map(([h,w]) => (
+                        <Typography key={h} sx={{ fontSize: "0.56rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "#2d3f60", width: w, flexShrink: h==="Device"?1:0, flex: h==="Device"?1:"none" }}>{h}</Typography>
+                      ))}
+                    </Box>
+                    {timeline.map((ev, i) => (
+                      <TimelineEvent key={i} index={i} type={ev.transaction_type} ts={fmtTs(ev.timestamp)} amount={ev.amount} userId={ev.user_id} country={ev.country} deviceId={ev.device_id} ip={ev.ip_address} />
+                    ))}
+                  </>
+                )}
+              </Box>
+            </DarkCard>
+
+            {/* Cluster graph */}
+            <DarkCard>
+              <CardHeader icon={<HubIcon fontSize="small" />} title="Cluster Graph" />
+              <Box sx={{ height: 340, bgcolor: "#070710" }}>
+                <ClusterGraph pack={pack} />
+              </Box>
+            </DarkCard>
+
+          </Stack>
+        </Grid>
+
+        {/* RIGHT 25% */}
+        <Grid size={{ xs: 12, md: 12, lg: 3 }}>
+          <Stack spacing={2}>
+
+            {/* Risk signals */}
+            <DarkCard accentColor={isLowRisk ? "#00C853" : "#E53935"}>
+              <CardHeader icon={<WarningAmberIcon fontSize="small" />} title={isLowRisk ? "Risk Assessment" : "Risk Signals"} />
+              <Box sx={{ p: 1.5 }}>
+                {isLowRisk ? (
+                  <Stack spacing={1}>
+                    <Alert severity="success" icon={<CheckCircleIcon />} sx={{ py: 0.5 }}>No risk signals detected.</Alert>
+                    {["No rapid deposit–withdraw cycles","No abnormal withdrawal ratio","No shared device/IP/affiliate links","Single-account activity","Velocity within expected range"].map((t,i) => (
+                      <Stack key={i} direction="row" spacing={1} alignItems="center">
+                        <CheckCircleIcon sx={{ fontSize: 13, color: "#00C853" }} />
+                        <Typography sx={{ fontSize: "0.74rem", color: "#64748b" }}>{t}</Typography>
+                      </Stack>
+                    ))}
+                  </Stack>
+                ) : topSignals.length === 0 ? (
+                  <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ py: 0.5 }}>No evidence signals yet.</Alert>
+                ) : (
+                  <Stack spacing={1}>
+                    {topSignals.map((sig, i) => <RiskSignalRow key={i} icon={signalIcon(sig.detail)} detail={sig.detail} points={sig.points} severity={sig.severity} />)}
+                  </Stack>
+                )}
+              </Box>
+            </DarkCard>
+
+            {/* Investigation pack */}
+            <Accordion defaultExpanded sx={{ bgcolor: "#111118 !important", border: "1px solid rgba(255,255,255,0.06) !important", "&.Mui-expanded": { mt: "0 !important" } }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ fontSize: 16, color: "#475569" }} />} sx={{ minHeight: "40px !important", "&.Mui-expanded": { minHeight: "40px !important" }, py: 0, px: 2 }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <SecurityIcon sx={{ fontSize: 14, color: "#F97316" }} />
+                  <Typography sx={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b" }}>Investigation Pack</Typography>
+                </Stack>
+              </AccordionSummary>
+              <AccordionDetails sx={{ p: "12px", bgcolor: "#111118" }}>
+                <Stack spacing={1.5}>
+                  {(pack.evidence_signals || []).length > 0 && (
+                    <Box>
+                      <SectionLabel sx={{ mb: 0.75 }}>All Evidence Signals</SectionLabel>
+                      <Stack spacing={0.75}>
+                        {(pack.evidence_signals || []).slice(0, 12).map((sig, i) => <RiskSignalRow key={i} icon={signalIcon(sig.detail)} detail={sig.detail} points={sig.points} severity={sig.severity} />)}
+                      </Stack>
+                    </Box>
+                  )}
+
+                  {pack.temporalChange?.hasChange && (
+                    <Box>
+                      <SectionLabel sx={{ mb: 0.75, color: "#EF5350" }}>Temporal Behavior Change</SectionLabel>
+                      <Alert severity="error" sx={{ py: 0.5, mb: 1 }}>
+                        <Typography sx={{ fontWeight: 700, fontSize: "0.74rem" }}>Behavior shifted 72h after account creation</Typography>
+                        <Typography sx={{ fontSize: "0.68rem", color: "#94A3B8", mt: 0.25 }}>Change score: {(pack.temporalChange.changeScore * 100).toFixed(0)}%</Typography>
+                      </Alert>
+                      <Stack spacing={0.75}>
+                        {(pack.temporalChange.evidence || []).map((ev, i) => <RiskSignalRow key={i} icon={<AccessTimeIcon fontSize="small" />} detail={ev.detail} severity={ev.value >= 0.7 ? "error" : "warning"} />)}
+                      </Stack>
+                    </Box>
+                  )}
+
+                  {(pack.link_evidence || []).length > 0 && (
+                    <Box>
+                      <SectionLabel sx={{ mb: 0.75 }}>Network Link Evidence</SectionLabel>
+                      <Stack spacing={0.5}>
+                        {(pack.link_evidence || []).slice(0, 8).map((ev, i) => (
+                          <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1, p: "7px 10px", bgcolor: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.15)", borderRadius: "4px" }}>
+                            <LinkIcon sx={{ fontSize: 12, color: "#F97316", flexShrink: 0 }} />
+                            <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.63rem", color: "#FB923C", flexShrink: 0 }}>{ev.by}</Typography>
+                            <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.58rem", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.key}</Typography>
+                          </Box>
+                        ))}
+                      </Stack>
+                    </Box>
+                  )}
+                </Stack>
+              </AccordionDetails>
+            </Accordion>
+
+          </Stack>
         </Grid>
       </Grid>
 
-      {/* Cluster Graph */}
-      <Accordion defaultExpanded>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="h6">Cluster Graph</Typography>
-        </AccordionSummary>
-        <AccordionDetails sx={{ p: 0 }}>
-          <Box sx={{ height: 400, bgcolor: "background.default" }}>
-            <ClusterGraph pack={pack} />
-          </Box>
-        </AccordionDetails>
-      </Accordion>
-
-      {/* Timeline */}
-      <Accordion defaultExpanded sx={{ mt: 2 }}>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="h6">Transaction Timeline ({timeline.length} events)</Typography>
-        </AccordionSummary>
-        <AccordionDetails sx={{ p: 0 }}>
-          <TableContainer component={Paper} sx={{ maxHeight: 420 }}>
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>Time</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>User</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }} align="right">
-                    Amount
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Country</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Device</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>IP</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {timeline.map((ev, i) => (
-                  <TableRow key={i}>
-                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem", whiteSpace: "nowrap" }}>
-                      {fmtTs(ev.timestamp)}
-                    </TableCell>
-                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
-                      {ev.user_id}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={ev.transaction_type}
-                        size="small"
-                        color={
-                          ev.transaction_type === "deposit"
-                            ? "success"
-                            : ev.transaction_type === "withdraw"
-                              ? "error"
-                              : "default"
-                        }
-                        sx={{ fontSize: "0.7rem" }}
-                      />
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontFamily: "monospace" }}>
-                      ${fmt(ev.amount)}
-                    </TableCell>
-                    <TableCell>{ev.country || "—"}</TableCell>
-                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.7rem" }}>
-                      {ev.device_id ? (
-                        <Tooltip title={ev.device_id}>
-                          <span>{String(ev.device_id).slice(0, 10)}</span>
-                        </Tooltip>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.7rem" }}>
-                      {ev.ip_address || "—"}
-                    </TableCell>
-                  </TableRow>
+      {/* ── Action buttons ── */}
+      <Box sx={{ mt: 3, bgcolor: "#0D0E14", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "6px", p: "16px 20px" }}>
+        <SectionLabel sx={{ mb: 2 }}>Case Actions</SectionLabel>
+        <Stack spacing={2}>
+          {actionGroups.map((group) => (
+            <Box key={group.label}>
+              <Typography sx={{ fontSize: "0.58rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: group.color, mb: 0.75, opacity: 0.8 }}>{group.label}</Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ gap: 1 }}>
+                {group.actions.map((a) => (
+                  <Button key={a.key} variant="outlined" size="small" onClick={() => handleAction(a.key)}
+                    sx={{ fontSize: "0.72rem", fontWeight: 600, color: group.color, borderColor: `${group.color}35`, bgcolor: `${group.color}08`, "&:hover": { bgcolor: `${group.color}18`, borderColor: `${group.color}60` } }}>
+                    {a.label}
+                  </Button>
                 ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </AccordionDetails>
-      </Accordion>
-
-      {/* Evidence Pack (details live here, not duplicated above) */}
-      <Accordion defaultExpanded sx={{ mt: 2 }}>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <SecurityIcon color="primary" />
-            <Typography variant="h6">Investigation Pack</Typography>
-          </Stack>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Stack spacing={3}>
-            {/* Evidence Signals */}
-            <Box>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-                <InsightsIcon fontSize="small" color="action" />
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  Evidence Signals
-                </Typography>
               </Stack>
-
-              {(pack.evidence_signals || []).length > 0 ? (
-                <Stack spacing={1}>
-                  {(pack.evidence_signals || []).slice(0, 20).map((sig, i) => (
-                    <Alert
-                      key={i}
-                      severity={sig.severity || "info"}
-                      variant="outlined"
-                      action={
-                        typeof sig.points === "number" ? (
-                          <Chip
-                            label={`+${sig.points} pts`}
-                            size="small"
-                            sx={{ fontFamily: "monospace", fontSize: "0.7rem" }}
-                          />
-                        ) : null
-                      }
-                    >
-                      {sig.detail}
-                    </Alert>
-                  ))}
-                </Stack>
-              ) : (
-                <Alert severity="info" icon={<InfoOutlinedIcon />}>
-                  No evidence signals collected for this case.
-                </Alert>
-              )}
             </Box>
+          ))}
+        </Stack>
+      </Box>
 
-            <Divider />
-
-            {/* Temporal Pattern Change (if detected) */}
-            {pack.temporalChange?.hasChange && (
-              <>
-                <Box>
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-                    <AccessTimeIcon fontSize="small" color="error" />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "error.main" }}>
-                      ⏰ Temporal Behavior Change Detected
-                    </Typography>
-                  </Stack>
-                  
-                  <Alert severity="error" sx={{ mb: 2 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                      BEHAVIOR CHANGED DRAMATICALLY 72 HOURS AFTER ACCOUNT CREATION
-                    </Typography>
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                      This account's activity pattern shifted significantly after the first 72 hours,
-                      indicating possible account takeover, credential compromise, or planned fraud.
-                    </Typography>
-                    <Box sx={{ mt: 1, p: 1, bgcolor: "background.paper", borderRadius: 1 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                        Change Score: {(pack.temporalChange.changeScore * 100).toFixed(0)}% 
-                        {pack.temporalChange.changeScore >= 0.7 ? " (VERY HIGH)" : " (HIGH)"}
-                      </Typography>
-                    </Box>
-                  </Alert>
-
-                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                    Detected Changes:
-                  </Typography>
-                  <Stack spacing={1} sx={{ mb: 2 }}>
-                    {(pack.temporalChange.evidence || []).map((ev, i) => (
-                      <Alert
-                        key={i}
-                        severity={ev.value >= 0.7 ? "error" : "warning"}
-                        variant="outlined"
-                        icon={<AccessTimeIcon fontSize="small" />}
-                      >
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {ev.detail}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Change magnitude: {(ev.value * 100).toFixed(0)}% | 
-                          Analysis period: {ev.period}
-                        </Typography>
-                      </Alert>
-                    ))}
-                  </Stack>
-
-                  <Paper sx={{ p: 2, bgcolor: "warning.50", border: 1, borderColor: "warning.main" }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                      🔍 Investigation Recommendations:
-                    </Typography>
-                    <Stack spacing={0.5}>
-                      <Typography variant="body2">
-                        • Verify customer identity with step-up authentication
-                      </Typography>
-                      <Typography variant="body2">
-                        • Check if device/IP changes correlate with behavior change
-                      </Typography>
-                      <Typography variant="body2">
-                        • Review KYC documents for signs of identity theft
-                      </Typography>
-                      <Typography variant="body2">
-                        • Contact customer to confirm recent transactions
-                      </Typography>
-                      <Typography variant="body2">
-                        • Hold any pending withdrawals until verification complete
-                      </Typography>
-                    </Stack>
-                  </Paper>
-                </Box>
-
-                <Divider />
-              </>
-            )}
-
-            {/* Network link evidence */}
-            <Box>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-                <LinkIcon fontSize="small" color="action" />
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  Network Link Evidence
-                </Typography>
-              </Stack>
-
-              {(pack.link_evidence || []).length > 0 ? (
-                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 220 }}>
-                  <Table size="small" stickyHeader>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Key</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {(pack.link_evidence || []).slice(0, 15).map((ev, i) => (
-                        <TableRow key={i}>
-                          <TableCell>
-                            <Chip
-                              label={(ev.by || "link").replace(/_/g, " ")}
-                              size="small"
-                              color={
-                                ev.by === "device"
-                                  ? "primary"
-                                  : ev.by === "ip"
-                                    ? "info"
-                                    : ev.by === "affiliate"
-                                      ? "warning"
-                                      : "default"
-                              }
-                            />
-                          </TableCell>
-                          <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
-                            {ev.key || "—"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              ) : (
-                <Alert severity="info" icon={<InfoOutlinedIcon />}>
-                  No network link evidence for this cluster.
-                </Alert>
-              )}
-            </Box>
-
-            <Divider />
-
-            {/* Behavioral anomaly */}
-            <Box>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-                <BoltIcon fontSize="small" color="action" />
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  Behavioral Anomaly
-                </Typography>
-              </Stack>
-
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Box sx={{ flex: 1 }}>
-                  <LinearProgress
-                    variant="determinate"
-                    value={Math.max(0, Math.min(100, behaviorPct))}
-                    sx={{
-                      height: 10,
-                      borderRadius: 5,
-                      bgcolor: "grey.200",
-                      "& .MuiLinearProgress-bar": {
-                        borderRadius: 5,
-                        bgcolor:
-                          behaviorPct >= 70
-                            ? "error.main"
-                            : behaviorPct >= 40
-                              ? "warning.main"
-                              : "success.main",
-                      },
-                    }}
-                  />
-                </Box>
-                <Typography variant="h6" sx={{ fontFamily: "monospace", minWidth: 60 }}>
-                  {behaviorPct}%
-                </Typography>
-              </Stack>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
-                Higher means deviation from historical/segment baseline.
-              </Typography>
-            </Box>
-
-            <Divider />
-
-            {/* Intervention */}
-            <Box>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-                <BlockIcon fontSize="small" color="action" />
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  Real-time Intervention
-                </Typography>
-              </Stack>
-
-              {pack.would_block ? (
-                <Alert severity="error" icon={<BlockIcon />}>
-                  Withdrawal intervention recommended: hold/step-up verification before funds leave.
-                </Alert>
-              ) : (
-                <Alert severity="success" icon={<CheckCircleIcon />}>
-                  Monitor only: no intervention required.
-                </Alert>
-              )}
-            </Box>
-
-            {/* Unsupervised (optional) */}
-            {pack.unsupervised && (
-              <>
-                <Divider />
-                <Box>
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-                    <InsightsIcon fontSize="small" color="secondary" />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                      Unsupervised Discovery
-                    </Typography>
-                  </Stack>
-                  <Alert 
-                    severity={pack.unsupervised.discovered_novel ? "warning" : "info"} 
-                    variant="outlined"
-                  >
-                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      {pack.unsupervised.discovered_novel ? "🔍 Novel Pattern Detected" : "Pattern Identified"}
-                    </Typography>
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                      <strong>Cluster:</strong> {pack.unsupervised.discovered_cluster}
-                    </Typography>
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                      <strong>Analysis:</strong> {pack.unsupervised.discovered_reason}
-                    </Typography>
-                    {pack.unsupervised.discovered_novel && (
-                      <Alert severity="error" sx={{ mt: 1 }}>
-                        <Typography variant="caption">
-                          <strong>⚠️ This is a NEW fraud pattern</strong> not seen in typical cases. 
-                          The system discovered this through unsupervised learning (DBSCAN clustering). 
-                          This case requires enhanced investigation as it represents an emerging threat.
-                        </Typography>
-                      </Alert>
-                    )}
-                  </Alert>
-                </Box>
-              </>
-            )}
-          </Stack>
-        </AccordionDetails>
-      </Accordion>
-
-      {/* Action Panel */}
-      <Card sx={{ mt: 3, border: "2px solid", borderColor: "primary.main" }}>
-        <CardContent>
-          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3 }}>
-            <SecurityIcon color="primary" sx={{ fontSize: 28 }} />
-            <Box>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Case Actions
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Take immediate action on this case
-              </Typography>
-            </Box>
-          </Stack>
-
-          <Grid container spacing={2}>
-            {/* Primary Actions */}
-            <Grid item xs={12} md={6}>
-              <Paper elevation={0} sx={{ p: 2, bgcolor: "error.50", border: "1px solid", borderColor: "error.main" }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: "error.main" }}>
-                  🚨 Immediate Actions
-                </Typography>
-                <Stack spacing={1.5}>
-                  <Button
-                    variant="contained"
-                    color="error"
-                    fullWidth
-                    startIcon={<BlockIcon />}
-                    onClick={() => handleAction('block')}
-                    sx={{ justifyContent: "flex-start", fontWeight: 600 }}
-                  >
-                    Block Account & Hold Funds
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    fullWidth
-                    startIcon={<WarningAmberIcon />}
-                    onClick={() => handleAction('freeze')}
-                    sx={{ justifyContent: "flex-start", fontWeight: 600 }}
-                  >
-                    Freeze Withdrawals Only
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    fullWidth
-                    startIcon={<PriorityHighIcon />}
-                    onClick={() => handleAction('escalate')}
-                    sx={{ justifyContent: "flex-start", fontWeight: 600 }}
-                  >
-                    Escalate to Senior Analyst
-                  </Button>
-                </Stack>
-              </Paper>
-            </Grid>
-
-            {/* Investigation Actions */}
-            <Grid item xs={12} md={6}>
-              <Paper elevation={0} sx={{ p: 2, bgcolor: "warning.50", border: "1px solid", borderColor: "warning.main" }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: "warning.main" }}>
-                  🔍 Investigation Actions
-                </Typography>
-                <Stack spacing={1.5}>
-                  <Button
-                    variant="contained"
-                    color="warning"
-                    fullWidth
-                    startIcon={<SecurityIcon />}
-                    onClick={() => handleAction('kyc')}
-                    sx={{ justifyContent: "flex-start", fontWeight: 600 }}
-                  >
-                    Request Enhanced KYC
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="warning"
-                    fullWidth
-                    startIcon={<InsightsIcon />}
-                    onClick={() => handleAction('history')}
-                    sx={{ justifyContent: "flex-start", fontWeight: 600 }}
-                  >
-                    Request Transaction History
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="warning"
-                    fullWidth
-                    startIcon={<HubIcon />}
-                    onClick={() => handleAction('investigate')}
-                    sx={{ justifyContent: "flex-start", fontWeight: 600 }}
-                  >
-                    Investigate Linked Accounts
-                  </Button>
-                </Stack>
-              </Paper>
-            </Grid>
-
-            {/* Regulatory Actions */}
-            <Grid item xs={12} md={6}>
-              <Paper elevation={0} sx={{ p: 2, bgcolor: "info.50", border: "1px solid", borderColor: "info.main" }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: "info.main" }}>
-                  📋 Regulatory Actions
-                </Typography>
-                <Stack spacing={1.5}>
-                  <Button
-                    variant="contained"
-                    color="info"
-                    fullWidth
-                    onClick={handleSar}
-                    disabled={sarLoading}
-                    startIcon={sarLoading ? <CircularProgress size={16} /> : <ReceiptLongIcon />}
-                    sx={{ justifyContent: "flex-start", fontWeight: 600 }}
-                  >
-                    {sarLoading ? "Generating..." : "Generate SAR Report"}
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="info"
-                    fullWidth
-                    startIcon={<CheckCircleIcon />}
-                    onClick={() => handleAction('file_sar')}
-                    sx={{ justifyContent: "flex-start", fontWeight: 600 }}
-                  >
-                    File SAR with Regulator
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="info"
-                    fullWidth
-                    startIcon={<InfoOutlinedIcon />}
-                    onClick={() => handleAction('export')}
-                    sx={{ justifyContent: "flex-start", fontWeight: 600 }}
-                  >
-                    Export Investigation Pack
-                  </Button>
-                </Stack>
-              </Paper>
-            </Grid>
-
-            {/* Case Management */}
-            <Grid item xs={12} md={6}>
-              <Paper elevation={0} sx={{ p: 2, bgcolor: "success.50", border: "1px solid", borderColor: "success.main" }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: "success.main" }}>
-                  ✅ Case Management
-                </Typography>
-                <Stack spacing={1.5}>
-                  <Button
-                    variant="contained"
-                    color="success"
-                    fullWidth
-                    startIcon={<CheckCircleIcon />}
-                    onClick={() => handleAction('close')}
-                    sx={{ justifyContent: "flex-start", fontWeight: 600 }}
-                  >
-                    Close Case - Resolved
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="success"
-                    fullWidth
-                    startIcon={<ThumbUpIcon />}
-                    onClick={() => handleAction('mark_fp')}
-                    sx={{ justifyContent: "flex-start", fontWeight: 600 }}
-                  >
-                    Mark as False Positive
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="success"
-                    fullWidth
-                    startIcon={<AccessTimeIcon />}
-                    onClick={() => handleAction('assign')}
-                    sx={{ justifyContent: "flex-start", fontWeight: 600 }}
-                  >
-                    Assign to Queue
-                  </Button>
-                </Stack>
-              </Paper>
-            </Grid>
-          </Grid>
-
-          {/* Notes Section */}
-          <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
-              Investigation Notes
+      {/* ── SAR draft ── */}
+      {sar && (
+        <Box sx={{ mt: 3, bgcolor: "#111118", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "6px", overflow: "hidden" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 2, py: 1.5, bgcolor: "#0D0E14", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: "#E53935" }} />
+            <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: "#FFB300" }} />
+            <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: "#00C853" }} />
+            <Typography sx={{ ml: 1, fontSize: "0.7rem", fontWeight: 600, color: "#475569", flex: 1 }}>
+              SAR Draft — {String(pack.case_id || "").replace("case_cluster_", "C-")}
             </Typography>
-            <Paper 
-              elevation={0} 
-              sx={{ 
-                p: 2, 
-                bgcolor: "grey.50",
-                border: "1px solid",
-                borderColor: "divider",
-                minHeight: 100,
-                cursor: "text"
-              }}
-            >
-              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
-                Click to add investigation notes, analyst comments, or case updates...
-              </Typography>
-            </Paper>
-          </Box>
-        </CardContent>
-      </Card>
-
-      {/* SAR Draft */}
-      <Card sx={{ mt: 3 }}>
-        <CardContent>
-          <Stack direction="row" alignItems="center" justifyContent="space-between">
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <ReceiptLongIcon color="primary" />
-              <Typography variant="h6">SAR Draft</Typography>
-            </Stack>
-
-            <Button variant="contained" onClick={handleSar} disabled={sarLoading}
-              startIcon={sarLoading ? <CircularProgress size={16} /> : <ReceiptLongIcon />}>
-              {sarLoading ? "Generating…" : "Generate SAR Draft"}
+            <Button size="small" startIcon={<ContentCopyIcon sx={{ fontSize: 13 }} />} onClick={copySar} sx={{ fontSize: "0.68rem", color: sarCopied ? "#69F0AE" : "#64748b", "&:hover": { color: "#94A3B8" } }}>
+              {sarCopied ? "Copied!" : "Copy"}
             </Button>
-          </Stack>
-
-          {sar && (() => {
-            const isLowRisk = sar.riskScore < 35;
-            const fmtMoney = (v) => "$" + Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            return (
-            <Box sx={{ mt: 3 }}>
-              {/* Document header */}
-              <Paper variant="outlined" sx={{
-                p: 3, mb: 3,
-                borderLeft: 4,
-                borderLeftColor: isLowRisk ? "success.main" : "error.main",
-                bgcolor: isLowRisk ? "success.50" : "error.50",
-              }}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
-                  <Box>
-                    <Typography variant="subtitle2" color="text.secondary" sx={{ textTransform: "uppercase", letterSpacing: 1, fontSize: "0.7rem", mb: 0.5 }}>
-                      {isLowRisk ? "Case Review Note" : "Suspicious Activity Report"}
-                    </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                      {sar.subject}
-                    </Typography>
-                  </Box>
-                  <Chip
-                    label={`Risk: ${sar.riskScore}/100`}
-                    size="small"
-                    color={sar.riskScore >= 70 ? "error" : sar.riskScore >= 40 ? "warning" : "success"}
-                    sx={{ fontWeight: 700 }}
-                  />
-                </Stack>
-
-                {/* Typology tags */}
-                {sar.typologyTags?.length > 0 && (
-                  <Stack direction="row" spacing={0.5} sx={{ mt: 1.5 }} flexWrap="wrap" useFlexGap>
-                    {sar.typologyTags.map((t) => (
-                      <Chip key={t} label={t.replace(/_/g, " ")} size="small" variant="outlined" color="warning"
-                        sx={{ fontSize: "0.7rem", textTransform: "capitalize" }} />
-                    ))}
-                  </Stack>
-                )}
-              </Paper>
-
-              {/* Financial & Network metrics row */}
-              <Grid container spacing={2} sx={{ mb: 3 }}>
-                {[
-                  { label: "Total Deposits", value: fmtMoney(sar.key_metrics?.deposit), color: "info.main" },
-                  { label: "Total Withdrawals", value: fmtMoney(sar.key_metrics?.withdraw), color: "warning.main" },
-                  { label: "Net Profit", value: fmtMoney(sar.key_metrics?.profit), color: "success.main" },
-                  { label: "Cluster Size", value: sar.network?.cluster_size || "—", color: "secondary.main" },
-                ].map((m) => (
-                  <Grid key={m.label} size={{ xs: 6, md: 3 }}>
-                    <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center" }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: "uppercase", fontSize: "0.65rem", letterSpacing: 0.5 }}>
-                        {m.label}
-                      </Typography>
-                      <Typography variant="h6" sx={{ fontWeight: 700, color: m.color, mt: 0.5 }}>
-                        {m.value}
-                      </Typography>
-                    </Paper>
-                  </Grid>
-                ))}
-              </Grid>
-
-              {/* Network link info */}
-              {sar.network?.linkStrength > 0 && (
-                <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                    <HubIcon fontSize="small" color="primary" />
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Network Links</Typography>
-                  </Stack>
-                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                    <Chip label={`${sar.network.linkStrength} link type(s)`} size="small" color="primary" variant="outlined" />
-                    {(sar.network.linkTypes || []).map((lt) => (
-                      <Chip key={lt} label={lt} size="small" variant="filled"
-                        sx={{ bgcolor: "primary.50", color: "primary.main", fontWeight: 600, fontSize: "0.7rem" }} />
-                    ))}
-                  </Stack>
-                </Paper>
-              )}
-
-              {/* Narrative — the main LLM-generated text */}
-              <Box sx={{ mb: 3 }}>
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                  <SecurityIcon fontSize="small" color="action" />
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Narrative</Typography>
-                  {sar.llm_used && (
-                    <Chip label="AI-Generated" size="small" variant="outlined" color="info" sx={{ fontSize: "0.65rem", height: 20 }} />
-                  )}
-                </Stack>
-                <Paper variant="outlined" sx={{
-                  p: 2.5,
-                  bgcolor: "grey.50",
-                  borderRadius: 2,
-                  "& p": { mb: 1.5 },
-                }}>
-                  {(sar.narrative || "").split("\n").filter(Boolean).map((para, i) => (
-                    <Typography key={i} variant="body2" sx={{ lineHeight: 1.75, color: "text.primary" }}>
-                      {para}
-                    </Typography>
-                  ))}
-                </Paper>
-              </Box>
-
-              {/* Summary */}
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Summary</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                  {sar.summary}
-                </Typography>
-              </Box>
-
-              <Divider sx={{ mb: 3 }} />
-
-              {/* Investigator Next Steps */}
-              <Box>
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
-                  <InsightsIcon fontSize="small" color="action" />
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Investigator Next Steps</Typography>
-                </Stack>
-                <Stack spacing={1}>
-                  {(sar.investigator_next_steps || []).map((s, i) => (
-                    <Stack key={i} direction="row" spacing={1.5} alignItems="flex-start">
-                      <Box sx={{
-                        minWidth: 24, height: 24, borderRadius: "50%",
-                        bgcolor: "primary.main", color: "white",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: "0.75rem", fontWeight: 700, mt: 0.1,
-                      }}>
-                        {i + 1}
-                      </Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
-                        {s}
-                      </Typography>
+          </Box>
+          <Box className="sar-terminal">{sar.narrative || sar.report || JSON.stringify(sar, null, 2)}</Box>
+          {(sar.indicators || sar.next_steps) && (
+            <Box sx={{ p: 2.5, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <Grid container spacing={2}>
+                {sar.indicators && (
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <SectionLabel sx={{ mb: 1 }}>Key Indicators</SectionLabel>
+                    <Stack spacing={0.75}>
+                      {(Array.isArray(sar.indicators) ? sar.indicators : [sar.indicators]).map((ind, i) => (
+                        <Box key={i} sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                          <Box sx={{ width: 4, height: 4, borderRadius: "50%", bgcolor: "#E53935", mt: "6px", flexShrink: 0 }} />
+                          <Typography sx={{ fontSize: "0.76rem", color: "#94A3B8" }}>{ind}</Typography>
+                        </Box>
+                      ))}
                     </Stack>
-                  ))}
-                </Stack>
-              </Box>
+                  </Grid>
+                )}
+                {sar.next_steps && (
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <SectionLabel sx={{ mb: 1 }}>Next Steps</SectionLabel>
+                    <Stack spacing={0.75}>
+                      {(Array.isArray(sar.next_steps) ? sar.next_steps : [sar.next_steps]).map((s, i) => (
+                        <Box key={i} sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                          <Box sx={{ width: 4, height: 4, borderRadius: "50%", bgcolor: "#F97316", mt: "6px", flexShrink: 0 }} />
+                          <Typography sx={{ fontSize: "0.76rem", color: "#94A3B8" }}>{s}</Typography>
+                        </Box>
+                      ))}
+                    </Stack>
+                  </Grid>
+                )}
+              </Grid>
             </Box>
-            );
-          })()}
-        </CardContent>
-      </Card>
+          )}
+        </Box>
+      )}
+
     </Box>
   );
 }
